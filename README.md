@@ -100,11 +100,16 @@ deployment — deliberately kept out of this repository.
 
 ## Docker image
 
-`docker build -t homelabs-hippocampus .` packages the same runtime as the jar
-command above: multi-stage Maven build with no `spring-boot:run` step (the
-exploded-classpath segfault does not exist inside the image), non-root
-(uid 1000) on `eclipse-temurin:25-jre-noble` — glibc, since the ONNX/DJL
-natives are glibc builds (no alpine/musl variant).
+`docker build -f homelabs-hippocampus/Dockerfile -t homelabs-hippocampus <projects-dir>`
+packages the same runtime as the jar command above. NOTE (ADR 0006): the
+build context is the PARENT `projects/` directory — the image build compiles
+and installs the `homelabs-mcp` starter first (sibling checkout — the internal
+`0.0.1-SNAPSHOT` never lives on Maven Central), then the app; without the
+sibling repo checkout the image build fails. The multi-stage Maven build has
+no `spring-boot:run` step (the exploded-classpath segfault does not exist
+inside the image), runs as non-root (uid 1000) on
+`eclipse-temurin:25-jre-noble` — glibc, since the ONNX/DJL natives are glibc
+builds (no alpine/musl variant).
 
 ## Conventions
 
