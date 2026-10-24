@@ -26,13 +26,15 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
  * Test-only resource-server wiring: a symmetric-HMAC JwtDecoder (so the
  * resource server accepts test tokens without a running Keycloak) and a
  * JwtEncoder to mint them. The decoder mirrors the production audience binding
- * (the {@code aud} claim must contain the resource URI) and overrides the
- * issuer-uri auto-config, which would otherwise reach for Keycloak.
+ * (the {@code aud} claim must contain the resource URI, {@code homelabs.mcp.resource})
+ * and replaces the starter's issuer-bound decoder, which would otherwise reach
+ * for Keycloak. The security chain itself is the starter's
+ * ({@code HomelabsMcpAutoConfiguration}) — this class only swaps the decoder.
  */
 @TestConfiguration
 public class TestSecurityConfig {
 
-    /** Matches {@code spring.security.oauth2.resourceserver.jwt.audiences} in application.yml. */
+    /** Matches {@code homelabs.mcp.resource} in application.yml. */
     public static final String AUDIENCE = "http://localhost:8090/mcp";
 
     private static final String SECRET =

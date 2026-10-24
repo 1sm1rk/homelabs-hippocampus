@@ -35,6 +35,12 @@ packaged jar instead (JEP 472, JDK 24+; the flag alone does not fix the
 segfault — only the packaged form is stable). `OrtSession.run` is not
 thread-safe; fine on the single-user sequential path.
 
+The MCP transport and the OAuth 2.1 resource server (RFC 9728 PRM) come from
+the `homelabs-mcp` Spring Boot starter (`de.homelabs:homelabs-mcp-spring-boot-starter`,
+ADR 0006). It is built and versioned in its own repository, so install it into
+the local Maven repository once — `mvn install -DskipTests` in that checkout —
+before building this project.
+
 The service needs a PostgreSQL 17 + pgvector database and an OAuth 2.1
 authorization server (tested against Keycloak 26.8); both are bound via Spring
 config or env (see Configuration). Flyway runs the schema migrations

@@ -4,10 +4,10 @@ spring:
   ai:
     mcp:
       server:
+        # The transport itself (protocol STREAMABLE, type SYNC) is the starter's
+        # contract — homelabs.mcp contributes those defaults at lowest precedence.
         name: hippocampus
         version: 0.0.1
-        protocol: STREAMABLE
-        type: SYNC
         annotation-scanner:
           enabled: true
   datasource:
@@ -16,27 +16,18 @@ spring:
     password: hippocampus
   flyway:
     enabled: true
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          # OAuth 2.1 resource server (AP-7). Issuer + audience are the only AS
-          # coupling — a later swap to another authorization server is a config
-          # change, not a code change (AS-swap rules).
-          issuer-uri: ${HIPPOCAMPUS_ISSUER_URI:http://localhost:8091/realms/hippocampus}
-          audiences:
-            - ${HIPPOCAMPUS_RESOURCE:http://localhost:8090/mcp}
 
-# Protected Resource Metadata (RFC 9728) — served at /.well-known/oauth-protected-resource
-hippocampus:
-  oauth:
+# MCP foundation (ADR 0006): the homelabs-mcp starter wires the OAuth 2.1 resource
+# server (issuer + audience binding) and the Protected Resource Metadata document
+# (RFC 9728, served at /.well-known/oauth-protected-resource). The HIPPOCAMPUS_*
+# env vars stay backward compatible — they map onto the starter namespace.
+homelabs:
+  mcp:
+    issuer: ${HIPPOCAMPUS_ISSUER_URI:http://localhost:8091/realms/hippocampus}
     resource: ${HIPPOCAMPUS_RESOURCE:http://localhost:8090/mcp}
     resource-metadata-url: ${HIPPOCAMPUS_RESOURCE_METADATA_URL:http://localhost:8090/.well-known/oauth-protected-resource}
-    authorization-servers:
-      - ${HIPPOCAMPUS_ISSUER_URI:http://localhost:8091/realms/hippocampus}
-    # Informational only: the server does not enforce scopes yet (write-side auth).
-    scopes-supported:
-      - mcp:tools
+
+hippocampus:
   ltm:
     # Stage 1 LTM (AP-6): chunking tuned for MiniLM's 128-token window (ADR 0005),
     # embedding backend selection and model files. The model is ~449 MB and NOT

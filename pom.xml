@@ -25,24 +25,22 @@
 
     <properties>
         <java.version>25</java.version>
-        <spring-ai.version>2.0.1</spring-ai.version>
         <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
 
     <dependencies>
-        <!-- MCP server, Streamable-HTTP, WebMVC, annotation-based tools (ADR 0004) -->
+        <!-- MCP foundation (transport Streamable-HTTP + OAuth 2.1 resource server with
+             RFC 9728 PRM) as a reusable starter — consumer per ADR 0006; it exposes
+             spring-ai's MCP server starter and the oauth2 resource server transitively,
+             so this app declares neither. -->
         <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+            <groupId>de.homelabs</groupId>
+            <artifactId>homelabs-mcp-spring-boot-starter</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-jdbc</artifactId>
-        </dependency>
-        <!-- OAuth 2.1 resource server (AP-7): standard Boot starter for JWT validation, no new library family -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -107,13 +105,6 @@
 
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>org.springframework.ai</groupId>
-                <artifactId>spring-ai-bom</artifactId>
-                <version>${spring-ai.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
             <dependency>
                 <groupId>org.testcontainers</groupId>
                 <artifactId>testcontainers-bom</artifactId>
