@@ -1,0 +1,17 @@
+# Only pom.xml and src/ are needed to build the image (see Dockerfile);
+# everything else stays out of the build context.
+.git
+.gitignore
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.app.yml
+target
+.settings
+.classpath
+.project
+keycloak
+scripts
+models
+README.md
+AGENTS.md

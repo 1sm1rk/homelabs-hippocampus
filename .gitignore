@@ -1,0 +1,18 @@
+# Build artifacts (incl. the packaged jar) — never commit binaries
+target/
+
+# Local deployment config (HIPPOCAMPUS_HOST etc.), created on the server
+.env
+
+# Embedding model artifacts (ADR 0005: deployment data outside the repo)
+models/
+
+# Eclipse / IDE metadata
+.settings/
+.classpath
+.project
+.idea/
+*.iml
+
+# Internal agent orientation (private ai2-side content) — never publish
+AGENTS.md
