@@ -81,7 +81,7 @@ public class LtmTools {
     public List<LtmFindHit> ltm_find(
             @McpToolParam(description = "Text to search for", required = true) String query,
             @McpToolParam(description = "Maximum number of results (default 5)", required = false) Integer limit) {
-        return service.find(query, clamp(limit, 5, 50));
+        return service.find(owner(), query, clamp(limit, 5, 50));
     }
 
     @McpTool(name = "ltm_get", description = "Fetch one long-term memory entry by id: the full content, or a slice of its chunks. "
@@ -92,7 +92,7 @@ public class LtmTools {
             @McpToolParam(description = "Id of the long-term entry, as returned by ltm_find/ltm_list", required = true) long ltm_id,
             @McpToolParam(description = "Chunk range (1-based); omit both to return the full entry", required = false) Integer from_seq,
             @McpToolParam(description = "Chunk range (1-based); omit both to return the full entry", required = false) Integer to_seq) {
-        return service.get(ltm_id, from_seq, to_seq);
+        return service.get(owner(), ltm_id, from_seq, to_seq);
     }
 
     @McpTool(name = "ltm_list", description = "The long-term memory index, newest first: id, title, origin, chunk count — no content. "
@@ -101,10 +101,10 @@ public class LtmTools {
             + "Keep limit low: a growing corpus makes even index lines numerous.")
     public List<LtmSummary> ltm_list(
             @McpToolParam(description = "Maximum number of entries to return (default 20)", required = false) Integer limit) {
-        return service.list(clamp(limit, 20, 100));
+        return service.list(owner(), clamp(limit, 20, 100));
     }
 
-    /** The authenticated principal (JWT {@code sub}) becomes the owner (AP-7, write side only). */
+    /** The authenticated principal (JWT {@code sub}) is the owner on writes AND reads (strict isolation, ADR 0007). */
     private String owner() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {

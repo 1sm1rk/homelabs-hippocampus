@@ -70,10 +70,10 @@ public class StmTools {
     }
 
     /**
-     * The authenticated principal (JWT {@code sub}) becomes the owner of every
-     * written event (AP-7, write side only). The /mcp endpoint requires a JWT,
-     * so there is always a principal in practice; 'unknown' is a defensive
-     * fallback for direct service calls outside the MCP filter chain.
+     * The authenticated principal (JWT {@code sub}) is the owner on writes AND reads
+     * (AP-7 write path, strict read-side isolation since ADR 0007). The /mcp endpoint
+     * requires a JWT, so there is always a principal in practice; 'unknown' is a
+     * defensive fallback for direct service calls outside the MCP filter chain.
      */
     private String owner() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -105,7 +105,7 @@ public class StmTools {
             @McpToolParam(description = "Text to search for", required = true) String query,
             @McpToolParam(description = "Maximum number of results (default 10)", required = false) Integer limit,
             @McpToolParam(description = "Include superseded events (default false)", required = false) Boolean includeSuperseded) {
-        return service.find(query, clamp(limit, 10, 50), Boolean.TRUE.equals(includeSuperseded));
+        return service.find(owner(), query, clamp(limit, 10, 50), Boolean.TRUE.equals(includeSuperseded));
     }
 
     @McpTool(description = "The most recent short-term memory events, newest first. "
@@ -116,7 +116,7 @@ public class StmTools {
     public List<StmEvent> list(
             @McpToolParam(description = "Maximum number of events to return (default 20)", required = false) Integer limit,
             @McpToolParam(description = "Include superseded events (default false)", required = false) Boolean includeSuperseded) {
-        return service.recent(clamp(limit, 20, 100), Boolean.TRUE.equals(includeSuperseded));
+        return service.recent(owner(), clamp(limit, 20, 100), Boolean.TRUE.equals(includeSuperseded));
     }
 
     private int clamp(Integer value, int defaultValue, int maxValue) {

@@ -19,6 +19,11 @@ import tools.jackson.databind.ObjectMapper;
  * unique indexes (V008) — a re-promotion or unchanged re-import surfaces as a
  * {@code DataIntegrityViolationException} that the tool layer (session 2) turns
  * into a no-op report.
+ *
+ * <p>Every read path is owner-scoped (strict isolation, ADR 0007): entries filter
+ * {@code owner = ?}, and chunks resolve ONLY through their owner-scoped entry (each
+ * chunk query joins {@code ltm_entry} on the owner). Rows on {@code owner =
+ * 'unknown'} (pre-auth data) are invisible to every token until backfilled.
  */
 @Repository
 public class LtmRepository {
@@ -27,7 +32,7 @@ public class LtmRepository {
             "id, title, content, kind, meta::text AS meta, origin_type, origin_ref, origin_hash, "
                     + "owner, source, actor, created_at";
 
-    private static final String CHUNK_COLUMNS = "id, ltm_id, seq, chunk_text, tokens, created_at";
+    private static final String CHUNK_COLUMNS = "c.id, c.ltm_id, c.seq, c.chunk_text, c.tokens, c.created_at";
 
     private final JdbcClient jdbc;
     private final ObjectMapper objectMapper;
@@ -71,24 +76,29 @@ public class LtmRepository {
                 .update();
     }
 
-    public Optional<LtmEntry> findById(long id) {
-        return jdbc.sql("SELECT " + ENTRY_COLUMNS + " FROM ltm_entry WHERE id = ?")
+    public Optional<LtmEntry> findById(String owner, long id) {
+        return jdbc.sql("SELECT " + ENTRY_COLUMNS + " FROM ltm_entry WHERE id = ? AND owner = ?")
                 .param(id)
+                .param(owner)
                 .query(this::mapEntry)
                 .optional();
     }
 
-    public List<LtmChunk> findChunks(long ltmId) {
-        return jdbc.sql("SELECT " + CHUNK_COLUMNS + " FROM ltm_chunk WHERE ltm_id = ? ORDER BY seq")
+    public List<LtmChunk> findChunks(String owner, long ltmId) {
+        return jdbc.sql("SELECT " + CHUNK_COLUMNS + " FROM ltm_chunk c JOIN ltm_entry e ON e.id = c.ltm_id "
+                        + "WHERE c.ltm_id = ? AND e.owner = ? ORDER BY c.seq")
                 .param(ltmId)
+                .param(owner)
                 .query(this::mapChunk)
                 .list();
     }
 
-    public Optional<LtmChunk> findChunk(long ltmId, int seq) {
-        return jdbc.sql("SELECT " + CHUNK_COLUMNS + " FROM ltm_chunk WHERE ltm_id = ? AND seq = ?")
+    public Optional<LtmChunk> findChunk(String owner, long ltmId, int seq) {
+        return jdbc.sql("SELECT " + CHUNK_COLUMNS + " FROM ltm_chunk c JOIN ltm_entry e ON e.id = c.ltm_id "
+                        + "WHERE c.ltm_id = ? AND c.seq = ? AND e.owner = ?")
                 .param(ltmId)
                 .param(seq)
+                .param(owner)
                 .query(this::mapChunk)
                 .optional();
     }
@@ -97,21 +107,24 @@ public class LtmRepository {
      * The four {@code ltm_find} search arms, each returning its top hits ordered
      * best-first (the rank supplies the RRF contribution). The cosine arm uses
      * the HNSW index via the {@code <=>} cosine-distance operator; the lexical
-     * arms mirror the STM search arms (V002/V003).
+     * arms mirror the STM search arms (V002/V003). Every arm is owner-scoped via
+     * its {@code ltm_entry} join (ADR 0007).
      */
-    public List<SearchArmHit> searchCosine(float[] embedding, int limit) {
+    public List<SearchArmHit> searchCosine(String owner, float[] embedding, int limit) {
         return jdbc.sql("SELECT c.ltm_id, c.seq FROM ltm_chunk c JOIN ltm_entry e ON e.id = c.ltm_id "
-                        + "ORDER BY c.embedding <=> ?::vector LIMIT ?")
+                        + "WHERE e.owner = ? ORDER BY c.embedding <=> ?::vector LIMIT ?")
+                .param(owner)
                 .param(Arrays.toString(embedding))
                 .param(limit)
                 .query(this::mapArmHit)
                 .list();
     }
 
-    public List<SearchArmHit> searchFts(String query, int limit) {
+    public List<SearchArmHit> searchFts(String owner, String query, int limit) {
         return jdbc.sql("SELECT c.ltm_id, c.seq FROM ltm_chunk c JOIN ltm_entry e ON e.id = c.ltm_id "
-                        + "WHERE to_tsvector('german', c.chunk_text) @@ plainto_tsquery('german', ?) "
+                        + "WHERE e.owner = ? AND to_tsvector('german', c.chunk_text) @@ plainto_tsquery('german', ?) "
                         + "ORDER BY ts_rank(to_tsvector('german', c.chunk_text), plainto_tsquery('german', ?)) DESC LIMIT ?")
+                .param(owner)
                 .param(query)
                 .param(query)
                 .param(limit)
@@ -119,9 +132,11 @@ public class LtmRepository {
                 .list();
     }
 
-    public List<SearchArmHit> searchTrigram(String query, int limit) {
+    public List<SearchArmHit> searchTrigram(String owner, String query, int limit) {
         return jdbc.sql("SELECT c.ltm_id, c.seq FROM ltm_chunk c JOIN ltm_entry e ON e.id = c.ltm_id "
-                        + "WHERE c.chunk_text %> ? ORDER BY word_similarity(c.chunk_text, ?) DESC LIMIT ?")
+                        + "WHERE e.owner = ? AND c.chunk_text %> ? "
+                        + "ORDER BY word_similarity(c.chunk_text, ?) DESC LIMIT ?")
+                .param(owner)
                 .param(query)
                 .param(query)
                 .param(limit)
@@ -129,19 +144,21 @@ public class LtmRepository {
                 .list();
     }
 
-    public List<SearchArmHit> searchIlike(String query, int limit) {
+    public List<SearchArmHit> searchIlike(String owner, String query, int limit) {
         return jdbc.sql("SELECT c.ltm_id, c.seq FROM ltm_chunk c JOIN ltm_entry e ON e.id = c.ltm_id "
-                        + "WHERE c.chunk_text ILIKE ? ESCAPE '\\' ORDER BY e.created_at DESC LIMIT ?")
+                        + "WHERE e.owner = ? AND c.chunk_text ILIKE ? ESCAPE '\\' ORDER BY e.created_at DESC LIMIT ?")
+                .param(owner)
                 .param(likePattern(query))
                 .param(limit)
                 .query(this::mapArmHit)
                 .list();
     }
 
-    public List<LtmSummary> list(int limit) {
+    public List<LtmSummary> list(String owner, int limit) {
         return jdbc.sql("SELECT e.id, e.title, e.origin_type, e.origin_ref, e.created_at, "
                         + "(SELECT count(*) FROM ltm_chunk c WHERE c.ltm_id = e.id) AS chunk_count "
-                        + "FROM ltm_entry e ORDER BY e.created_at DESC LIMIT ?")
+                        + "FROM ltm_entry e WHERE e.owner = ? ORDER BY e.created_at DESC LIMIT ?")
+                .param(owner)
                 .param(limit)
                 .query(this::mapSummary)
                 .list();

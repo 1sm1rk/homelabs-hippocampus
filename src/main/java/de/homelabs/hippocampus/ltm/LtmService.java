@@ -30,6 +30,10 @@ import tools.jackson.databind.ObjectMapper;
  * ({@code ltm_find} over four arms fused with RRF). Append-only like STM — a
  * re-promotion or unchanged re-import surfaces as a {@link DataIntegrityViolationException}
  * from V008's dedup guards and is reported as a no-op, never a mutation.
+ *
+ * <p>All read paths are owner-scoped (strict isolation, ADR 0007): the caller passes
+ * the token {@code sub} explicitly, exactly as on the write path, and chunks resolve
+ * only through their owner-scoped entry.
  */
 @Service
 public class LtmService {
@@ -77,7 +81,9 @@ public class LtmService {
      */
     @Transactional
     public PromoteOutcome promote(String owner, String source, long stmId, String title) {
-        StmEvent event = stmRepository.findById(stmId)
+        // Ownership check before the copy: a foreign or absent event gets the plain
+        // "not found" error, so the read does not leak its existence (ADR 0007).
+        StmEvent event = stmRepository.findById(owner, stmId)
                 .orElseThrow(() -> new IllegalArgumentException("no event #" + stmId + " to promote"));
         String resolvedTitle = (title == null || title.isBlank()) ? deriveTitle(event.content()) : title;
         String hash = sha256(event.content());
@@ -120,21 +126,22 @@ public class LtmService {
      * dedup per entry (best chunk wins), then build excerpts. Whole content is
      * never returned — {@code ltm_get} is the explicit fetch.
      */
-    public List<LtmFindHit> find(String query, int limit) {
+    public List<LtmFindHit> find(String owner, String query, int limit) {
         float[] queryVector = embeddingProvider.embed(query);
         List<RrfFusion.ArmResult> arms = List.of(
-                new RrfFusion.ArmResult("cosine", ltmRepository.searchCosine(queryVector, ARM_LIMIT)),
-                new RrfFusion.ArmResult("fts", ltmRepository.searchFts(query, ARM_LIMIT)),
-                new RrfFusion.ArmResult("trigram", ltmRepository.searchTrigram(query, ARM_LIMIT)),
-                new RrfFusion.ArmResult("ilike", ltmRepository.searchIlike(query, ARM_LIMIT)));
+                new RrfFusion.ArmResult("cosine", ltmRepository.searchCosine(owner, queryVector, ARM_LIMIT)),
+                new RrfFusion.ArmResult("fts", ltmRepository.searchFts(owner, query, ARM_LIMIT)),
+                new RrfFusion.ArmResult("trigram", ltmRepository.searchTrigram(owner, query, ARM_LIMIT)),
+                new RrfFusion.ArmResult("ilike", ltmRepository.searchIlike(owner, query, ARM_LIMIT)));
 
         List<LtmFindHit> results = new ArrayList<>();
         for (RrfFusion.FusedHit hit : RrfFusion.fuse(arms)) {
             if (results.size() >= limit) {
                 break;
             }
-            LtmEntry entry = ltmRepository.findById(hit.ltmId()).orElse(null);
-            LtmChunk chunk = entry == null ? null : ltmRepository.findChunk(hit.ltmId(), hit.seq()).orElse(null);
+            LtmEntry entry = ltmRepository.findById(owner, hit.ltmId()).orElse(null);
+            LtmChunk chunk = entry == null ? null
+                    : ltmRepository.findChunk(owner, hit.ltmId(), hit.seq()).orElse(null);
             if (entry == null || chunk == null) {
                 continue;
             }
@@ -146,10 +153,10 @@ public class LtmService {
     }
 
     /** Full entry ({@code fromSeq}/{@code toSeq} both null) or a 1-based chunk slice. */
-    public LtmGetResult get(long ltmId, Integer fromSeq, Integer toSeq) {
-        LtmEntry entry = ltmRepository.findById(ltmId)
+    public LtmGetResult get(String owner, long ltmId, Integer fromSeq, Integer toSeq) {
+        LtmEntry entry = ltmRepository.findById(owner, ltmId)
                 .orElseThrow(() -> new IllegalArgumentException("no long-term entry #" + ltmId));
-        List<LtmChunk> all = ltmRepository.findChunks(ltmId);
+        List<LtmChunk> all = ltmRepository.findChunks(owner, ltmId);
         int total = all.size();
         if (fromSeq == null && toSeq == null) {
             return new LtmGetResult(ltmId, entry.title(), entry.kind(), entry.originType(), entry.originRef(),
@@ -171,8 +178,8 @@ public class LtmService {
                 entry.createdAt(), total, null, slices);
     }
 
-    public List<LtmSummary> list(int limit) {
-        return ltmRepository.list(limit);
+    public List<LtmSummary> list(String owner, int limit) {
+        return ltmRepository.list(owner, limit);
     }
 
     private int ingest(long ltmId, String content) {

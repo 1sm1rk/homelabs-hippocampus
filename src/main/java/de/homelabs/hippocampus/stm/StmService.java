@@ -18,6 +18,9 @@ import tools.jackson.databind.ObjectMapper;
  * never rejected). {@code update} implements mechanized supersedes (Q2/Q3): the
  * corrected event is written as a new row, the old row is marked superseded, and no
  * content is ever mutated (ADR 0002).
+ *
+ * <p>All reads are owner-scoped (strict isolation, ADR 0007): the caller passes the
+ * token {@code sub} explicitly, exactly as on the write path.
  */
 @Service
 public class StmService {
@@ -69,7 +72,9 @@ public class StmService {
         if (content == null && kind == null && actor == null && (meta == null || meta.isEmpty())) {
             throw new IllegalArgumentException("nothing to change: pass at least one of content, kind, actor, meta");
         }
-        StmEvent old = repository.findById(id)
+        // Ownership check BEFORE the supersede marker: a foreign or absent row gets the
+        // plain "not found" error, so the read does not leak its existence (ADR 0007).
+        StmEvent old = repository.findById(owner, id)
                 .orElseThrow(() -> new IllegalArgumentException("no event #" + id + " to update"));
 
         String newContent = content != null ? content : old.content();
@@ -84,12 +89,12 @@ public class StmService {
         return newId;
     }
 
-    public List<StmEvent> find(String query, int limit, boolean includeSuperseded) {
-        return repository.find(query, limit, includeSuperseded);
+    public List<StmEvent> find(String owner, String query, int limit, boolean includeSuperseded) {
+        return repository.find(owner, query, limit, includeSuperseded);
     }
 
-    public List<StmEvent> recent(int limit, boolean includeSuperseded) {
-        return repository.recent(limit, includeSuperseded);
+    public List<StmEvent> recent(String owner, int limit, boolean includeSuperseded) {
+        return repository.recent(owner, limit, includeSuperseded);
     }
 
     private Map<String, String> mergeMeta(String oldMetaJson, Map<String, String> overrides) {

@@ -69,7 +69,7 @@ class LtmRepositoryIT {
         repository.insertChunk(id, 1, "The homelab server runs on port 5432", vector, 8);
         repository.insertChunk(id, 2, "and speaks Postgres.", embeddingProvider.embed("and speaks Postgres."), 3);
 
-        LtmEntry entry = repository.findById(id).orElseThrow();
+        LtmEntry entry = repository.findById("test-owner", id).orElseThrow();
         assertThat(entry.title()).isEqualTo("Infra note");
         assertThat(entry.kind()).isEqualTo("fact");
         assertThat(entry.originType()).isEqualTo("promote");
@@ -80,7 +80,7 @@ class LtmRepositoryIT {
         assertThat(entry.actor()).isEqualTo("user");
         assertThat(entry.meta()).contains("infra");
 
-        List<LtmChunk> chunks = repository.findChunks(id);
+        List<LtmChunk> chunks = repository.findChunks("test-owner", id);
         assertThat(chunks).hasSize(2);
         assertThat(chunks.get(0).seq()).isEqualTo(1);
         assertThat(chunks.get(0).chunkText()).isEqualTo("The homelab server runs on port 5432");
@@ -118,6 +118,6 @@ class LtmRepositoryIT {
                 null, "import", "/tmp/doc.md", "hash-2");
 
         assertThat(second).isPositive();
-        assertThat(repository.findChunks(second)).isEmpty();
+        assertThat(repository.findChunks("test-owner", second)).isEmpty();
     }
 }

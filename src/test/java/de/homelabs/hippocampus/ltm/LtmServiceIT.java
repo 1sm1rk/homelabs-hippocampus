@@ -62,7 +62,7 @@ class LtmServiceIT {
         assertThat(outcome.id()).isPositive();
         assertThat(outcome.chunkCount()).isEqualTo(1);
 
-        List<LtmFindHit> hits = service.find("MiniLM", 5);
+        List<LtmFindHit> hits = service.find("test-owner", "MiniLM", 5);
         assertThat(hits).isNotEmpty();
         assertThat(hits.get(0).ltmId()).isEqualTo(outcome.id());
         assertThat(hits.get(0).title()).isEqualTo("The homelab runs MiniLM for semantic embeddings");
@@ -104,7 +104,7 @@ class LtmServiceIT {
         assertThat(outcome.chunkCount()).isEqualTo(1);
         assertThat(outcome.warnings()).isEmpty();
 
-        List<LtmFindHit> hits = service.find("umlauts", 5);
+        List<LtmFindHit> hits = service.find("test-owner", "umlauts", 5);
         assertThat(hits).anyMatch(h -> h.ltmId() == outcome.id());
         assertThat(hits.stream().filter(h -> h.ltmId() == outcome.id()).findFirst().orElseThrow().title())
                 .isEqualTo(file.getFileName().toString());
@@ -141,7 +141,7 @@ class LtmServiceIT {
         LtmService.ImportOutcome outcome = service.importFile("test-owner", "test", pdf.toString(), "German cities", null);
 
         assertThat(outcome.id()).isPositive();
-        LtmGetResult full = service.get(outcome.id(), null, null);
+        LtmGetResult full = service.get("test-owner", outcome.id(), null, null);
         assertThat(full.content()).contains("Bevölkerung").contains("Städten").contains("Straßen");
     }
 
@@ -150,12 +150,12 @@ class LtmServiceIT {
         long stmId = stmRepository.save("test-owner", "test", "user", "fact", "single chunk content", null);
         long ltmId = service.promote("test-owner", "test", stmId, null).id();
 
-        LtmGetResult full = service.get(ltmId, null, null);
+        LtmGetResult full = service.get("test-owner", ltmId, null, null);
         assertThat(full.content()).isEqualTo("single chunk content");
         assertThat(full.totalChunks()).isEqualTo(1);
         assertThat(full.chunks()).isNull();
 
-        LtmGetResult slice = service.get(ltmId, 1, 1);
+        LtmGetResult slice = service.get("test-owner", ltmId, 1, 1);
         assertThat(slice.content()).isNull();
         assertThat(slice.chunks()).extracting(LtmChunkSlice::seq).containsExactly(1);
         assertThat(slice.chunks().get(0).text()).isEqualTo("single chunk content");
@@ -163,16 +163,16 @@ class LtmServiceIT {
 
     @Test
     void getRejectsUnknownEntryAndBadRange() {
-        assertThatThrownBy(() -> service.get(999999L, null, null))
+        assertThatThrownBy(() -> service.get("test-owner", 999999L, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("no long-term entry #999999");
 
         long stmId = stmRepository.save("test-owner", "test", "user", "fact", "range check", null);
         long ltmId = service.promote("test-owner", "test", stmId, null).id();
-        assertThatThrownBy(() -> service.get(ltmId, 0, 1))
+        assertThatThrownBy(() -> service.get("test-owner", ltmId, 0, 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("from_seq must be >= 1");
-        assertThatThrownBy(() -> service.get(ltmId, 2, 1))
+        assertThatThrownBy(() -> service.get("test-owner", ltmId, 2, 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("to_seq must be >= from_seq");
     }
@@ -184,7 +184,7 @@ class LtmServiceIT {
         long first = service.promote("test-owner", "test", stm1, "first").id();
         long second = service.promote("test-owner", "test", stm2, "second").id();
 
-        List<LtmSummary> summaries = service.list(10);
+        List<LtmSummary> summaries = service.list("test-owner", 10);
 
         assertThat(summaries).extracting(LtmSummary::id).contains(second, first);
         assertThat(summaries.get(0).title()).isEqualTo("second");

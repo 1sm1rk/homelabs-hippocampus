@@ -77,15 +77,15 @@ class StmServiceIT {
 
         long newId = service.update("test-owner", "test", oldId, "nebula", null, null, null);
 
-        StmEvent updated = service.find("nebula", 10, false).get(0);
+        StmEvent updated = service.find("test-owner", "nebula", 10, false).get(0);
         assertThat(updated.id()).isEqualTo(newId);
         assertThat(updated.kind()).isEqualTo("fact");
         assertThat(updated.actor()).isEqualTo("user");
         assertThat(updated.meta()).contains("infra").contains("supersedes");
 
         // the old event is superseded and hidden from default find
-        assertThat(service.find("quasar", 10, false)).isEmpty();
-        StmEvent old = service.find("quasar", 10, true).get(0);
+        assertThat(service.find("test-owner", "quasar", 10, false)).isEmpty();
+        StmEvent old = service.find("test-owner", "quasar", 10, true).get(0);
         assertThat(old.supersededBy()).isEqualTo(newId);
     }
 
@@ -97,7 +97,7 @@ class StmServiceIT {
         long newId = service.update("test-owner", "test", oldId, null, null, null,
                 Map.of("week", "2026-W41", "uhrzeit", "09:00"));
 
-        StmEvent updated = service.find("meeting", 10, true).get(0);
+        StmEvent updated = service.find("test-owner", "meeting", 10, true).get(0);
         assertThat(updated.meta())
                 .contains("infra")           // inherited topic survives
                 .contains("2026-W41")        // overridden week

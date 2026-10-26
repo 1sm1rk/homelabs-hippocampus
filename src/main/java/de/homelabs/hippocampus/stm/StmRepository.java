@@ -15,6 +15,17 @@ import org.springframework.stereotype.Repository;
 
 import tools.jackson.databind.ObjectMapper;
 
+/**
+ * JDBC access to the short-term memory (V001/V002/V003/V006/V007).
+ *
+ * <p>Every read path is owner-scoped (strict isolation, ADR 0007): {@code find},
+ * {@code recent} and {@code findById} filter {@code owner = ?} with the token
+ * {@code sub}, so one user's events are invisible to every other principal. Rows
+ * on {@code owner = 'unknown'} (pre-auth data) match no token and stay invisible
+ * until backfilled — fail-closed, no escape hatch. {@code findMetaKeys} is the
+ * deliberate exception: the meta registry is curation data, not user data.
+ * {@code markSuperseded} is internal and reachable only after a scoped load.
+ */
 @Repository
 public class StmRepository {
 
@@ -42,9 +53,10 @@ public class StmRepository {
                 .single();
     }
 
-    public Optional<StmEvent> findById(long id) {
-        return jdbc.sql("SELECT " + SELECT_COLUMNS + " FROM stm_event WHERE id = ?")
+    public Optional<StmEvent> findById(String owner, long id) {
+        return jdbc.sql("SELECT " + SELECT_COLUMNS + " FROM stm_event WHERE id = ? AND owner = ?")
                 .param(id)
+                .param(owner)
                 .query(this::mapRow)
                 .optional();
     }
@@ -56,10 +68,11 @@ public class StmRepository {
                 .update();
     }
 
-    public List<StmEvent> find(String query, int limit, boolean includeSuperseded) {
+    public List<StmEvent> find(String owner, String query, int limit, boolean includeSuperseded) {
         String active = includeSuperseded ? "" : "superseded_by IS NULL AND ";
         return jdbc.sql("SELECT " + SELECT_COLUMNS + " FROM stm_event WHERE " + active
-                        + "(content ILIKE ? ESCAPE '\\' OR tsv @@ plainto_tsquery('german', ?) OR content %> ?) ORDER BY created_at DESC LIMIT ?")
+                        + "owner = ? AND (content ILIKE ? ESCAPE '\\' OR tsv @@ plainto_tsquery('german', ?) OR content %> ?) ORDER BY created_at DESC LIMIT ?")
+                .param(owner)
                 .param(likePattern(query))
                 .param(query)
                 .param(query)
@@ -68,9 +81,11 @@ public class StmRepository {
                 .list();
     }
 
-    public List<StmEvent> recent(int limit, boolean includeSuperseded) {
-        String active = includeSuperseded ? "" : "WHERE superseded_by IS NULL ";
-        return jdbc.sql("SELECT " + SELECT_COLUMNS + " FROM stm_event " + active + "ORDER BY created_at DESC LIMIT ?")
+    public List<StmEvent> recent(String owner, int limit, boolean includeSuperseded) {
+        String active = includeSuperseded ? "" : "superseded_by IS NULL AND ";
+        return jdbc.sql("SELECT " + SELECT_COLUMNS + " FROM stm_event WHERE " + active
+                        + "owner = ? ORDER BY created_at DESC LIMIT ?")
+                .param(owner)
                 .param(limit)
                 .query(this::mapRow)
                 .list();
