@@ -129,6 +129,53 @@ exploded-classpath segfault does not exist inside the image), runs as non-root
 natives are glibc builds (no alpine/musl variant) — and expects the embedding
 model mounted at `/opt/hippocampus/models/multilingual-MiniLM`.
 
+## CI/CD
+
+`.github/workflows/ci.yml` runs on every pull request to `main`, on every push to
+`main`, on `v*` tags and on manual dispatch:
+
+| Job | Runs on | What it does |
+|---|---|---|
+| `verify` | every pull request, every push, every tag | `mvn -B verify` — unit tests plus the Testcontainers integration tests; a red run blocks every publish |
+| `publish-image` | pushes (and manual runs) on `main` | builds and pushes the container image |
+| `publish-adapter` | `v*` tag pushes | releases `de.homelabs:hippocampus-mcp` to GitHub Packages |
+
+Flow: feature branch → pull request (`verify`) → merge to `main` (verify + image).
+The image is `ghcr.io/1sm1rk/homelabs-hippocampus` tagged `latest` and
+`sha-<commit>`, amd64 only, built from the same Dockerfile contract described
+above. Deployment hosts pull instead of building:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+### Releasing the adapter
+
+The pom versions stay `0.0.1-SNAPSHOT` for local and dev builds — a tag is the
+version of record: the pipeline strips the `v`, applies the version to its
+ephemeral checkout (`mvn versions:set`) and deploys the adapter together with the
+parent pom it inherits from. Releases are tag-driven; editing versions before
+tagging is neither needed nor used.
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+A consumer then bumps its adapter version — for the MCP gateway that is
+`hippocampus-mcp.version` in its pom, merged as a normal pull request.
+
+### One-time repository settings
+
+- Settings → Branches → branch protection rule for `main`: require the status
+  check **`verify`**.
+- Packages → `homelabs-hippocampus` (container image) → package settings:
+  visibility **public**, so deployment hosts need no registry credentials.
+- Packages → `hippocampus-mcp` (Maven) → package settings: visibility **public**
+  and, under *Manage Actions access*, read access for the gateway repository
+  `1sm1rk/homelabs-mcp` — GitHub Packages requires an authenticated read even for
+  public packages, and the gateway's build uses `GITHUB_TOKEN`.
+
 ## Conventions
 
 - English for code and docs; Java 25 records; constructor injection
