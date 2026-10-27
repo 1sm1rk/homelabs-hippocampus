@@ -91,8 +91,9 @@ OAuth 2.1 resource server (MCP authorization spec, 2026-07-28 revision).
   `WWW-Authenticate: Bearer resource_metadata="…"` — the healthy state
 - Token validation: issuer + audience binding via RFC 8707 (`aud` must contain
   `HIPPOCAMPUS_RESOURCE`, written through Keycloak's audience protocol mapper)
-- Every `store` writes the token `sub` as the event's `owner` (write side
-  only); read-side scoping is parked until a second user exists (ADR 0004)
+- Every `store` writes the token `sub` as the event's `owner`; every read
+  path is scoped to the token `sub` as well (rows that predate authentication
+  belong to no token until they are backfilled)
 
 A ready-made docker compose orchestration (Postgres + Keycloak, realm export,
 model install helper, LAN/SSH-tunnel recipes) ships with the operator's
@@ -101,7 +102,7 @@ deployment — deliberately kept out of this repository.
 ## Docker image
 
 `docker build -f homelabs-hippocampus/Dockerfile -t homelabs-hippocampus <projects-dir>`
-packages the same runtime as the jar command above. NOTE (ADR 0006): the
+packages the same runtime as the jar command above. NOTE: the
 build context is the PARENT `projects/` directory — the image build compiles
 and installs the `homelabs-mcp` starter first (sibling checkout — the internal
 `0.0.1-SNAPSHOT` never lives on Maven Central), then the app; without the
@@ -115,17 +116,22 @@ builds (no alpine/musl variant).
 
 - English for code and docs; Java 25 records; constructor injection
 - Schema changes only via Flyway migrations (`src/main/resources/db/migration/`)
-- No vector column until Stage 1 (ADR 0003)
-- `actor` is an open vocabulary, not a closed enum (ADR 0002): `user` (content
+- `actor` is an open vocabulary, not a closed enum: `user` (content
   from the user), `ai` (the agent's own findings), `tool` (tool output) — later
   a person's name or email. Documented in prose, not enforced by the schema.
 - Meta keys are governed by `meta_key_registry` (V005): established keys
   (topic, project, relates_to, supersedes, typ, week, stage, origin) are
   validated; deprecated keys warn; unknown keys are accepted and surfaced as
   curation candidates. Registry contents change only via Flyway migrations.
-- OAuth 2.1 resource server (AP-7): `POST /mcp` requires a Bearer JWT; the
-  owner column carries the token `sub` on the write side only. Read-side
-  scoping is parked until the ADR-0004 trigger (second user / beyond-LAN).
+- OAuth 2.1 resource server: `POST /mcp` requires a Bearer JWT. Ownership is
+  strictly scoped to the token `sub` on every read and write; rows that
+  predate authentication become visible only once backfilled.
+
+## Commit messages
+
+Commit messages are short and describe the change itself. They deliberately
+avoid references to internal planning artifacts (ADRs, work packages): those
+documents are not part of this public repository.
 
 ## License
 
