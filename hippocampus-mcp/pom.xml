@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>de.homelabs</groupId>
+        <artifactId>homelabs-hippocampus-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>hippocampus-mcp</artifactId>
+    <name>hippocampus-mcp</name>
+    <description>MCP tool definitions for the hippocampus memory service, plus the typed client binding them to its REST API</description>
+
+    <dependencies>
+        <!-- Boot's blocking HTTP client (RestClient + JSON support): the adapter talks
+             to the service's REST API over plain HTTP. No new dependency family. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-restclient</artifactId>
+        </dependency>
+        <!-- Servlet API (provided): the client reads the incoming Authorization header
+             from the current request; the gateway's container supplies the implementation
+             at runtime, so the adapter adds nothing to the runtime footprint. -->
+        <dependency>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
+            <scope>provided</scope>
+        </dependency>
+        <!-- Tool annotations and the MCP exchange type. This split artifact is the
+             minimal one carrying @McpTool/@McpToolParam; the version is the gateway's
+             Spring AI line so both sides build the same annotation convention. -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-mcp-annotations</artifactId>
+            <version>${spring-ai.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>

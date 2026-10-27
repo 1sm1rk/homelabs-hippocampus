@@ -12,10 +12,11 @@
     </parent>
 
     <groupId>de.homelabs</groupId>
-    <artifactId>homelabs-hippocampus</artifactId>
+    <artifactId>homelabs-hippocampus-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>homelabs-hippocampus</name>
-    <description>Two-tier memory service (STM/LTM) for AI harnesses, exposed via MCP</description>
+    <packaging>pom</packaging>
+    <name>homelabs-hippocampus-parent</name>
+    <description>Two-tier memory service (STM/LTM): REST API server plus its MCP adapter module</description>
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
@@ -23,85 +24,21 @@
         </license>
     </licenses>
 
+    <modules>
+        <!-- The memory service itself: domain, persistence, REST API. -->
+        <module>app</module>
+        <!-- MCP tool definitions + typed REST client for the MCP gateway; released
+             as de.homelabs:hippocampus-mcp and composed by the gateway. -->
+        <module>hippocampus-mcp</module>
+    </modules>
+
     <properties>
         <java.version>25</java.version>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <!-- Tool annotations for the adapter module; kept on the gateway's Spring AI
+             line so adapter and gateway build the same annotation convention. -->
+        <spring-ai.version>2.0.1</spring-ai.version>
     </properties>
-
-    <dependencies>
-        <!-- MCP foundation (transport Streamable-HTTP + OAuth 2.1 resource server with
-             RFC 9728 PRM) as a reusable starter — consumer per ADR 0006; it exposes
-             spring-ai's MCP server starter and the oauth2 resource server transitively,
-             so this app declares neither. -->
-        <dependency>
-            <groupId>de.homelabs</groupId>
-            <artifactId>homelabs-mcp-spring-boot-starter</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-jdbc</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <!-- Boot 4: auto-configurations are per-technology modules; flyway-core alone no longer migrates -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-flyway</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.flywaydb</groupId>
-            <artifactId>flyway-database-postgresql</artifactId>
-        </dependency>
-        <!-- ONNX Runtime (Stage 1 embeddings, in-process CPU inference — ADR 0005) -->
-        <dependency>
-            <groupId>com.microsoft.onnxruntime</groupId>
-            <artifactId>onnxruntime</artifactId>
-            <version>1.30.0</version>
-        </dependency>
-        <!-- HuggingFace tokenizers via DJL (museum-decided tokenizer path — ADR 0005) -->
-        <dependency>
-            <groupId>ai.djl.huggingface</groupId>
-            <artifactId>tokenizers</artifactId>
-            <version>0.38.0</version>
-        </dependency>
-        <!-- PDF text extraction for import_file (AP-6 scope): Apache PDFBox 3.0.8, Apache-2.0, the only serious permissive-license pure-Java candidate -->
-        <dependency>
-            <groupId>org.apache.pdfbox</groupId>
-            <artifactId>pdfbox</artifactId>
-            <version>3.0.8</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-testcontainers</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers-junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers-postgresql</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <!-- Testcontainers (shaded docker-java) needs commons-lang3 at runtime; ai.djl:api 0.38.0
-             excludes it transitively via commons-compress, so it is declared explicitly here. -->
-        <dependency>
-            <groupId>org.apache.commons</groupId>
-            <artifactId>commons-lang3</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
 
     <dependencyManagement>
         <dependencies>
@@ -117,11 +54,8 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-            <!-- *IT.java classes run under failsafe, not surefire -->
+            <!-- *IT.java classes run under failsafe, not surefire; inherited by every
+                 module so integration tests never silently stop running. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>

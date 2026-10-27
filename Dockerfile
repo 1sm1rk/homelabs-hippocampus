@@ -1,45 +1,35 @@
 # syntax=docker/dockerfile:1
 
-# Multi-stage build for the hippocampus MCP service (server deployment /
+# Multi-stage build for the hippocampus memory service (server deployment /
 # fresh-database test). BUILD CONTEXT = the parent `projects/` directory
-# (ai2/projects): since ADR 0006 the app depends on the
-# homelabs-mcp-spring-boot-starter (0.0.1-SNAPSHOT — an INTERNAL artifact,
-# never on Maven Central), so the build compiles + INSTALLS the starter
-# source FIRST (sibling repo homelabs-mcp/, the standard nested layout on
-# laptop AND server) and then the app. The public repo alone cannot produce
-# the image today — build with:
+# (ai2/projects) — that is the layout the private compose files reference:
 #   docker build -f homelabs-hippocampus/Dockerfile -t homelabs-hippocampus <projects-dir>
+#
+# The build compiles this repo's modules directly; the only module the image
+# needs is `app` (the REST API server). The MCP adapter module is composed by
+# the gateway image and deliberately plays no part here, so there is no sibling
+# checkout to build first.
 #
 # The runtime stage ships ONLY the packaged fat jar: the in-process ONNX
 # Runtime + DJL tokenizer natives segfault deterministically on the exploded
 # classpath (AGENTS.md gotcha), so the jar form is the only stable runtime —
-# same as `java -jar target/…jar` on the host. Tests (Testcontainers) need a
-# Docker daemon: they run on the host via `mvn verify`, not inside the build.
+# same as `java -jar app/target/…jar` on the host. Tests (Testcontainers) need
+# a Docker daemon: they run on the host via `mvn verify`, not inside the build.
 
-# ---- Stage 1: build the jars (JDK 25, same Maven line as the host) ----
+# ---- Stage 1: build the jar (JDK 25, same Maven line as the host) ----
 # Needs BuildKit/buildx (Docker's default builder since 23.x): the .m2 cache
 # mount survives pom.xml changes, so dependency re-downloads stay rare.
-# Both COPYs take explicit paths only — the context root (projects/) is
-# pruned minimally via the sibling .dockerignore.
 FROM maven:3.10.0-eclipse-temurin-25-noble AS build
 WORKDIR /build
 
-# Starter first: installs into the shared .m2 cache so the app build can
-# resolve the internal 0.0.1-SNAPSHOT artifact locally.
-COPY homelabs-mcp/pom.xml starter/
-RUN --mount=type=cache,target=/root/.m2 \
-    cd starter && mvn -B -ntp dependency:go-offline
-
-COPY homelabs-mcp/src ./starter/src
-RUN --mount=type=cache,target=/root/.m2 \
-    cd starter && mvn -B -ntp package -DskipTests install
-
-# App: same .m2 cache (identical mount target = same cache content).
-COPY homelabs-hippocampus/pom.xml app/
+# Parent pom + app pom first, so the dependency layer is cached across source
+# changes. The aggregator resolves as `../pom.xml` from the app module.
+COPY homelabs-hippocampus/pom.xml ./pom.xml
+COPY homelabs-hippocampus/app/pom.xml ./app/pom.xml
 RUN --mount=type=cache,target=/root/.m2 \
     cd app && mvn -B -ntp dependency:go-offline
 
-COPY homelabs-hippocampus/src ./app/src
+COPY homelabs-hippocampus/app/src ./app/src
 RUN --mount=type=cache,target=/root/.m2 \
     cd app && mvn -B -ntp package -DskipTests
 
@@ -47,8 +37,6 @@ RUN --mount=type=cache,target=/root/.m2 \
 # so no alpine/musl variant) ----
 FROM eclipse-temurin:25-jre-noble
 
-# Non-root service user. uid/gid 1000 matches the usual first login user on
-# the host, so read-only bind mounts (model dir, imported files) line up.
 # Non-root service user: the noble base image already ships an `ubuntu` user
 # (uid/gid 1000) — reuse it instead of creating a duplicate-uid user.
 # uid 1000 matches the usual first login user on the host, so read-only bind

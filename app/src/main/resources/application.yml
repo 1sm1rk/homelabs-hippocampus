@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: homelabs-hippocampus
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hippocampus
+    username: hippocampus
+    password: hippocampus
+  flyway:
+    enabled: true
+
+hippocampus:
+  api:
+    # OAuth 2.0 resource server on the REST API (the API's caller is the MCP gateway,
+    # a configured server): tokens must be issued by this AS and carry the GATEWAY's
+    # resource URI as audience — audience is resource-location binding, never user
+    # authorization. There is no PRM/discovery document: no browser client talks to
+    # this API. Env vars stay backward compatible.
+    issuer-uri: ${HIPPOCAMPUS_ISSUER_URI:http://localhost:8091/realms/hippocampus}
+    audience: ${HIPPOCAMPUS_RESOURCE:http://localhost:8090/mcp}
+  ltm:
+    # Stage 1 LTM (AP-6): chunking tuned for MiniLM's 128-token window (ADR 0005),
+    # embedding backend selection and model files. The model is ~449 MB and NOT
+    # committed — run scripts/install-minilm.sh to fetch it. Provider selection:
+    # 'onnx' (default, eager-loaded at startup) or 'mock' (deterministic, tests).
+    chunking:
+      target-tokens: 115
+      overlap-tokens: 24
+      hard-cap-tokens: 128
+    embedding:
+      provider: onnx
+      # Loose coupling (ADR 0005, owner decision 2026-10-13): the model artifacts are
+      # deployment data OUTSIDE the repo. Paths are absolute and overridable via env
+      # (e.g. HIPPOCAMPUS_LTM_EMBEDDING_MODEL_PATH), defaulting to the XDG data dir.
+      # Never working-directory-relative model paths.
+      model-path: ${user.home}/.local/share/hippocampus/models/multilingual-MiniLM/model.onnx
+      tokenizer-path: ${user.home}/.local/share/hippocampus/models/multilingual-MiniLM/tokenizer.json
+      dimension: 384
+
+server:
+  port: 8090
+
+logging:
+  level:
+    de.homelabs.hippocampus: DEBUG

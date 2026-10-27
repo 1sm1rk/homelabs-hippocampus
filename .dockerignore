@@ -1,17 +1,18 @@
-# Only pom.xml and src/ are needed to build the image (see Dockerfile);
-# everything else stays out of the build context.
+# The image build uses the PARENT projects/ directory as its context (see the
+# Dockerfile), so the rules that apply there live in projects/.dockerignore.
+# This file only matters when this repo itself is used as the context root:
+# prune build output, VCS/IDE metadata and deployment data.
 .git
 .gitignore
 Dockerfile
 .dockerignore
-docker-compose.yml
-docker-compose.app.yml
-target
-.settings
+**/target/
+.settings/
 .classpath
 .project
-keycloak
-scripts
-models
-README.md
+.idea/
+*.iml
+models/
+.env
 AGENTS.md
+README.md
